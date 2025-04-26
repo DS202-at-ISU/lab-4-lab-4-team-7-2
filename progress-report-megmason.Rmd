@@ -1,1 +1,81 @@
+---
+title: "Progress Report"
+author: "Megan Mason"
+date: "2025-04-23"
+output: html_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+---
+
+<!-- README.md is generated from README.Rmd. Please edit the README.Rmd file -->
+
+
+```{r}
+library(tidyverse)
+library(Lahman)
+library(stringr)
+library(stringi)
+library(rvest)
+library(readr)
+url <- "https://www.baseball-reference.com/awards/hof_2025.shtml"
+html <- read_html(url)
+tables <- html_table(html)
+
+head(tables[[1]], 3)
+data <- tables[[1]]
+actual_col_names <- data[1, ]
+
+colnames(data) <- actual_col_names
+data <- data[-1, ]
+head(data, 3)
+names(data) <- make.unique(names(data))
+
+# Parse and convert each column to numeric listed:
+data <- data %>%
+  mutate(
+    across(
+      c(
+        Votes, `%vote`, HOFm, HOFs, Yrs, WAR, WAR7, JAWS, Jpos,
+        G, AB, R, H, HR, RBI, SB, BB, BA, OBP, SLG, OPS, `OPS+`,
+        W, L, ERA, `ERA+`, WHIP, 
+        G.1, GS, SV, IP, H.1, HR.1, BB.1, SO
+      ),
+      ~ as.numeric(parse_number(.))
+    )
+  )
+
+data <- data %>%
+  mutate(`First Lastname` = str_trim(`Name`))
+
+data$`First Lastname` <- str_remove(data$`First Lastname`, "^[A-Z]-")
+data$`First Lastname` <- stri_trans_general(data$`First Lastname`, "Latin-ASCII")
+
+# Load People and prepare matching info
+People_needed_info <- People %>%
+  mutate(
+    `First Lastname` = paste(str_replace(nameFirst, "\\. ", "."), nameLast)
+  ) %>%
+  select(playerID, `First Lastname`)
+
+# Join playerID into 2025 data
+data <- data %>%
+  left_join(People_needed_info, by = 'First Lastname')
+
+data_modified <- data %>%
+  mutate(
+    yearID = 2025,
+    votedBy = "BBWAA",
+    ballots = max(Votes, na.rm = TRUE),  # or fill manually if known (e.g., 385 ballots)
+    needed = round(0.75 * ballots),
+    votes = Votes,
+    inducted = if_else(votes >= needed, "Y", "N"),
+    category = "player",
+    needed_note = NA
+  ) %>%
+  select(colnames(HallOfFame))
+
+write.csv(data_modified, file = "megan_mason_hof_2025_clean.csv", row.names = FALSE)
+```
