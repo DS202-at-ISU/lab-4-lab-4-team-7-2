@@ -1,0 +1,68 @@
+---
+title: "Progress Report"
+author: "ajstre"
+output: html_document
+---
+
+```{r}
+library(Lahman)
+
+library(rvest)
+library(readr)
+library(tidyverse)
+library(readr)
+
+url <- "https://www.baseball-reference.com/awards/hof_2025.shtml"
+html <- read_html(url)
+tables <- html_table(html)
+
+data <- tables[[1]]
+actual_col_names <- data[1, ]
+colnames(data) <- actual_col_names
+data <- data[-1, ] 
+names(data) <- make.unique(names(data))
+
+Hof <- data(HallOfFame, package = "Lahman")
+
+data <- data %>%
+  mutate(
+    across(
+      c(
+        Votes, `%vote`, HOFm, HOFs, Yrs, WAR, WAR7, JAWS, Jpos,
+        G, AB, R, H, HR, RBI, SB, BB, BA, OBP, SLG, OPS, `OPS+`,
+        W, L, ERA, `ERA+`, WHIP, 
+        G.1, GS, SV, IP, H.1, HR.1, BB.1, SO
+      ),
+      ~ as.numeric(parse_number(.))
+    )
+  )
+
+data$Name <- gsub("X-", "", data$Name)
+
+#Player id is first 5 letters of last name, first 2 of first name and ID
+data <- data %>%
+  mutate(PlayerID = paste0(
+    str_sub(tolower(word(Name, -1)), 1, 5),
+    str_sub(tolower(word(Name, 1)), 1, 2),
+    "01"
+  ))
+
+newHof <- data %>%
+  mutate(
+    playerID = data$PlayerID,
+    yearID = 2025,
+    votedBy = "BBWAA",
+    ballots = max(Votes, na.rm = TRUE), 
+    needed = round(0.75 * ballots),
+    votes = Votes,
+    inducted = if_else(votes >= needed, "Y", "N"),
+    category = "player",
+    needed_note = NA
+  ) %>%
+  select(colnames(HallOfFame))
+
+combinedHof <- rbind(HallOfFame, newHof)
+
+write.csv(combinedHof, file="ajstre_combined_hof.csv")
+```
+
